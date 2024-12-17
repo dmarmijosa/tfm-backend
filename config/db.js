@@ -1,14 +1,21 @@
-const mongoose = require('mongoose');
+const { createClient } = require("redis");
+
+const client = createClient({
+  url: process.env.UPSTASH_REDIS_URL, // Almacena tu URL de conexión en variables de entorno
+});
+
+client.on("error", (err) => {
+  console.error("Error de conexión a Redis:", err);
+});
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('Base de datos conectada');
-  } catch (err) {
-    console.error('Error en la conexión a la base de datos:', err.message);
+    await client.connect();
+    console.log("✅ Conexión exitosa a Upstash Redis 🚀");
+  } catch (error) {
+    console.error("❌ Error al conectar a Redis:", error.message);
     process.exit(1);
   }
 };
 
-connectDB();
-module.exports = mongoose;
+module.exports = { client, connectDB };

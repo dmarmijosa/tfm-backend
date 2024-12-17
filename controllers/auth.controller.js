@@ -1,42 +1,67 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const User = require("../models/user.model");
+const { client } = require("../config/db"); // Importamos el cliente de Redis
 
+// Registro de usuario
 exports.register = async (req, res) => {
   const { username, password } = req.body;
+
   try {
+    // Verificar si el usuario ya existe
+    const existingUser = await client.hGetAll(`user:${username}`);
+    if (existingUser.username) {
+      return res
+        .status(400)
+        .json({ message: "El usuario ya existe", status: false });
+    }
+
+    // Hashear la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, password: hashedPassword });
-    await user.save();
+
+    // Guardar usuario en Redis
+    await client.hSet(`user:${username}`, {
+      username,
+      password: hashedPassword,
+    });
+
     res
       .status(201)
       .json({ message: "Usuario creado correctamente", status: true });
   } catch (err) {
+    console.error("Error en el registro:", err.message);
     res.status(500).json({ error: err.message, status: false });
   }
 };
 
+// Login de usuario
 exports.login = async (req, res) => {
   const { username, password } = req.body;
+
   try {
-    const user = await User.findOne({ username });
-    if (!user)
+    // Buscar usuario en Redis
+    const user = await client.hGetAll(`user:${username}`);
+    if (!user.username) {
       return res
         .status(400)
-        .json({ message: "Problemas de incio sessión", status: false });
+        .json({ message: "Usuario o contraseña incorrectos", status: false });
+    }
 
+    // Comparar contraseñas
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
+    if (!isMatch) {
       return res
         .status(400)
-        .json({ message: "Problemas de incio sessión", status: false });
+        .json({ message: "Usuario o contraseña incorrectos", status: false });
+    }
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+    // Generar token JWT
+    const token = jwt.sign({ username: user.username }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
-    res.json({ token: token, status: true });
-  } catch (err) {
-    res.status(500).json({ error: err.messag, status: false });
-  }
 
+    res.json({ token, status: true });
+  } catch (err) {
+    console.error("Error en el login:", err.message);
+    res.status(500).json({ error: err.message, status: false });
+  }
 };
