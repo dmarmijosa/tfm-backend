@@ -51,3 +51,27 @@ exports.handleWebhook = async (req, res) => {
     res.status(500).json({ message: "Error al procesar el webhook" });
   }
 };
+
+exports.getAllWebhooks = async (req, res) => {
+    try {
+      // Obtener todas las claves que comienzan con "webhook:"
+      const keys = await client.keys("webhook:*");
+  
+      if (keys.length === 0) {
+        return res.status(404).json({ message: "No se encontraron registros" });
+      }
+  
+      // Obtener los valores de todas las claves
+      const webhooks = await Promise.all(
+        keys.map(async (key) => {
+          const data = await client.get(key);
+          return JSON.parse(data);
+        })
+      );
+  
+      res.status(200).json({ message: "Webhooks obtenidos correctamente", webhooks });
+    } catch (error) {
+      console.error("Error al obtener webhooks:", error.message);
+      res.status(500).json({ message: "Error al obtener registros" });
+    }
+  };
